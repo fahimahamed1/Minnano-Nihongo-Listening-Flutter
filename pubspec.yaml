@@ -1,0 +1,76 @@
+name: minnano_nihongo_listening
+description: A beautiful Japanese language learning app featuring audio lessons from Minna no Nihongo.
+publish_to: 'none'
+version: 2.0.0+2
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  just_audio: ^0.9.36
+  provider: ^6.1.1
+  url_launcher: ^6.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/audio/
+    - assets/audio/lesson_1/
+    - assets/audio/lesson_2/
+    - assets/audio/lesson_3/
+    - assets/audio/lesson_4/
+    - assets/audio/lesson_5/
+    - assets/audio/lesson_6/
+    - assets/audio/lesson_7/
+    - assets/audio/lesson_8/
+    - assets/audio/lesson_9/
+    - assets/audio/lesson_10/
+    - assets/audio/lesson_11/
+    - assets/audio/lesson_12/
+    - assets/audio/lesson_13/
+    - assets/audio/lesson_14/
+    - assets/audio/lesson_15/
+    - assets/audio/lesson_16/
+    - assets/audio/lesson_17/
+    - assets/audio/lesson_18/
+    - assets/audio/lesson_19/
+    - assets/audio/lesson_20/
+    - assets/audio/lesson_21/
+    - assets/audio/lesson_22/
+    - assets/audio/lesson_23/
+    - assets/audio/lesson_24/
+    - assets/audio/lesson_25/
+    - assets/audio/lesson_26/
+    - assets/audio/lesson_27/
+    - assets/audio/lesson_28/
+    - assets/audio/lesson_29/
+    - assets/audio/lesson_30/
+    - assets/audio/lesson_31/
+    - assets/audio/lesson_32/
+    - assets/audio/lesson_33/
+    - assets/audio/lesson_34/
+    - assets/audio/lesson_35/
+    - assets/audio/lesson_36/
+    - assets/audio/lesson_37/
+    - assets/audio/lesson_38/
+    - assets/audio/lesson_39/
+    - assets/audio/lesson_40/
+    - assets/audio/lesson_41/
+    - assets/audio/lesson_42/
+    - assets/audio/lesson_43/
+    - assets/audio/lesson_44/
+    - assets/audio/lesson_45/
+    - assets/audio/lesson_46/
+    - assets/audio/lesson_47/
+    - assets/audio/lesson_48/
+    - assets/audio/lesson_49/
+    - assets/audio/lesson_50/
