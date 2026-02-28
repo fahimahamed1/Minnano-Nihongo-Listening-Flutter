@@ -1,36 +1,80 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lesson.dart';
 import '../../data/providers/audio_provider.dart';
 import 'player_screen.dart';
 
+// Smooth fade+slide route for lesson detail (consistent with player route feel)
+Route<void> _lessonDetailRoute(Lesson lesson) => PageRouteBuilder<void>(
+      pageBuilder: (_, __, ___) => LessonDetailScreen(lesson: lesson),
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 260),
+      transitionsBuilder: (_, animation, __, child) {
+        final slide = Tween<Offset>(
+          begin: const Offset(0.06, 0),
+          end: Offset.zero,
+        ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic));
+        final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
+        return FadeTransition(
+            opacity: fade, child: SlideTransition(position: slide, child: child));
+      },
+    );
+
+// Entry point used by home_screen
+Route<void> lessonDetailRoute(Lesson lesson) => _lessonDetailRoute(lesson);
+
 class LessonDetailScreen extends StatefulWidget {
   final Lesson lesson;
-
   const LessonDetailScreen({super.key, required this.lesson});
 
   @override
   State<LessonDetailScreen> createState() => _LessonDetailScreenState();
 }
 
-class _LessonDetailScreenState extends State<LessonDetailScreen> {
+class _LessonDetailScreenState extends State<LessonDetailScreen>
+    with SingleTickerProviderStateMixin {
   List<AudioFile> _audioFiles = [];
   bool _isLoading = true;
+  String? _error;
+
+  // Stagger controller for list items
+  late final AnimationController _listCtrl;
 
   @override
   void initState() {
     super.initState();
+    _listCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 400),
+    );
     _loadAudioFiles();
   }
 
+  @override
+  void dispose() {
+    _listCtrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadAudioFiles() async {
-    final files = await AudioProvider.loadLessonFiles(widget.lesson.number);
-    if (mounted) {
+    try {
+      final files =
+          await AudioProvider.loadLessonFiles(widget.lesson.number);
+      if (!mounted) return;
       setState(() {
         _audioFiles = files;
         _isLoading = false;
+      });
+      _listCtrl.forward();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _error = 'Could not load audio files.';
       });
     }
   }
@@ -38,7 +82,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Container(
+      body: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: AppColors.backgroundGradient,
         ),
@@ -46,9 +90,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           child: Column(
             children: [
               _buildHeader(context),
-              Expanded(
-                child: _isLoading ? _buildLoading() : _buildContent(),
-              ),
+              Expanded(child: _buildBody()),
             ],
           ),
         ),
@@ -65,12 +107,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
             color: AppColors.surface,
             borderRadius: BorderRadius.circular(12),
             elevation: 1,
+            shadowColor: const Color(0x14000000),
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
               onTap: () => Navigator.pop(context),
               child: const Padding(
                 padding: EdgeInsets.all(10),
-                child: Icon(Icons.arrow_back_rounded, size: 22),
+                child: Icon(Icons.arrow_back_rounded,
+                    size: 22, color: AppColors.textPrimary),
               ),
             ),
           ),
@@ -80,7 +124,8 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     gradient: AppColors.primaryGradient,
                     borderRadius: BorderRadius.circular(6),
@@ -107,42 +152,85 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     );
   }
 
-  Widget _buildLoading() {
-    return const Center(
-      child: CircularProgressIndicator(color: AppColors.primary),
-    );
-  }
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: AppColors.primary,
+          strokeWidth: 2.5,
+        ),
+      );
+    }
 
-  Widget _buildContent() {
-    if (_audioFiles.isEmpty) {
+    if (_error != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.music_off_rounded,
-              size: 48,
-              color: AppColors.textTertiary,
-            ),
+            const Icon(Icons.error_outline_rounded,
+                size: 44, color: AppColors.textTertiary),
             const SizedBox(height: 12),
-            Text(
-              'No audio files available',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            Text(_error!, style: Theme.of(context).textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            TextButton(
+                onPressed: () {
+                  setState(() {
+                    _isLoading = true;
+                    _error = null;
+                  });
+                  _loadAudioFiles();
+                },
+                child: const Text('Retry')),
           ],
         ),
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      itemCount: _audioFiles.length,
-      itemBuilder: (context, index) {
-        return _AudioCard(
-          audio: _audioFiles[index],
-          onTap: () => _playAudio(index),
-        );
-      },
+    if (_audioFiles.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.music_off_rounded,
+                size: 44, color: AppColors.textTertiary),
+            const SizedBox(height: 12),
+            Text('No audio files available',
+                style: Theme.of(context).textTheme.bodyMedium),
+          ],
+        ),
+      );
+    }
+
+    return RepaintBoundary(
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        cacheExtent: 500,
+        itemCount: _audioFiles.length,
+        itemBuilder: (context, index) {
+          // Stagger each item's entry
+          final itemAnim = CurvedAnimation(
+            parent: _listCtrl,
+            curve: Interval(
+              (index * 0.08).clamp(0.0, 0.7),
+              ((index * 0.08) + 0.5).clamp(0.0, 1.0),
+              curve: Curves.easeOutCubic,
+            ),
+          );
+          return FadeTransition(
+            opacity: itemAnim,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.15),
+                end: Offset.zero,
+              ).animate(itemAnim),
+              child: _AudioCard(
+                audio: _audioFiles[index],
+                onTap: () => _playAudio(index),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 
@@ -153,17 +241,16 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           index,
           widget.lesson.number,
         );
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const PlayerScreen()),
-    );
+    Navigator.push(context, playerRoute());
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Audio card
+// ─────────────────────────────────────────────────────────────────────────────
 class _AudioCard extends StatelessWidget {
   final AudioFile audio;
   final VoidCallback onTap;
-
   const _AudioCard({required this.audio, required this.onTap});
 
   @override
@@ -176,31 +263,58 @@ class _AudioCard extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 8),
           decoration: BoxDecoration(
             color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
             border: isActive
-                ? Border.all(color: AppColors.primary, width: 2)
+                ? Border.all(color: AppColors.primary, width: 1.8)
                 : null,
+            boxShadow: isActive
+                ? [
+                    const BoxShadow(
+                      color: Color(0x20E91E63),
+                      blurRadius: 12,
+                      offset: Offset(0, 4),
+                    )
+                  ]
+                : [
+                    const BoxShadow(
+                      color: Color(0x0A000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    )
+                  ],
           ),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               onTap: onTap,
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(13),
                 child: Row(
                   children: [
-                    Container(
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: isActive ? AppColors.primary : AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(10),
+                        color: isActive
+                            ? AppColors.primary
+                            : AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       alignment: Alignment.center,
-                      child: isActive
-                          ? const Icon(Icons.pause_rounded, color: Colors.white, size: 24)
-                          : Text(audio.typeIcon, style: const TextStyle(fontSize: 22)),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 180),
+                        child: isActive
+                            ? const Icon(Icons.equalizer_rounded,
+                                key: ValueKey('eq'),
+                                color: Colors.white,
+                                size: 22)
+                            : Text(audio.typeIcon,
+                                key: ValueKey('icon'),
+                                style: const TextStyle(fontSize: 20)),
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -209,7 +323,14 @@ class _AudioCard extends StatelessWidget {
                         children: [
                           Text(
                             audio.formattedDisplayName,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
+                                  color: isActive
+                                      ? AppColors.primary
+                                      : AppColors.textPrimary,
+                                ),
                           ),
                           const SizedBox(height: 2),
                           Text(
@@ -219,14 +340,20 @@ class _AudioCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    Container(
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 220),
+                      curve: Curves.easeOut,
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: AppColors.primaryLight,
-                        borderRadius: BorderRadius.circular(8),
+                        color: isActive
+                            ? const Color(0x20E91E63)
+                            : AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.play_arrow_rounded,
+                      child: Icon(
+                        isActive
+                            ? Icons.pause_rounded
+                            : Icons.play_arrow_rounded,
                         color: AppColors.primary,
                         size: 20,
                       ),

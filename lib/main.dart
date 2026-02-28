@@ -30,7 +30,7 @@ class MinnanoNihongoApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => AudioProvider(),
       child: MaterialApp(
-        title: 'Minnano Nihongo',
+        title: 'Minnano Nihongo Listening',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {

@@ -67,11 +67,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-                        isa = PBXGroup;
-                        children = (
-                        );
-                        sourceTree = "<group>";
-                };
                 9740EEB11CF90186004384FC /* Flutter */ = {
                         isa = PBXGroup;
                         children = (
@@ -119,7 +114,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+                331C8080294A63A400263BE5 /* RunnerTests */ = {
                         isa = PBXNativeTarget;
+                        buildConfigurationList = 331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */;
                         buildPhases = (
                                 331C807D294A63A400263BE5 /* Sources */,
                                 331C807F294A63A400263BE5 /* Resources */,
@@ -129,6 +126,8 @@
                         dependencies = (
                                 331C8086294A63A400263BE5 /* PBXTargetDependency */,
                         );
+                        name = RunnerTests;
+                        productName = RunnerTests;
                         productType = "com.apple.product-type.bundle.unit-test";
                 };
                 97C146ED1CF9000F007C117D /* Runner */ = {
@@ -185,6 +184,7 @@
                         projectRoot = "";
                         targets = (
                                 97C146ED1CF9000F007C117D /* Runner */,
+                                331C8080294A63A400263BE5 /* RunnerTests */,
                         );
                 };
 /* End PBXProject section */
@@ -566,6 +566,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+                331C8087294A63A400263BE5 /* Build configuration list for PBXNativeTarget "RunnerTests" */ = {
                         isa = XCConfigurationList;
                         buildConfigurations = (
                                 331C8088294A63A400263BE5 /* Debug */,

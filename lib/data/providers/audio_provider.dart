@@ -1,218 +1,286 @@
+import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:just_audio/just_audio.dart';
+
 import '../models/lesson.dart';
 
-class AudioProvider extends ChangeNotifier {
-  final AudioPlayer _player = AudioPlayer();
+// ─────────────────────────────────────────────────────────────────────────────
+// Utility – pure function, no provider dependency
+// ─────────────────────────────────────────────────────────────────────────────
+String formatDuration(Duration d) {
+  final m = d.inMinutes;
+  final s = d.inSeconds.remainder(60);
+  return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+}
 
-  List<AudioFile> _currentPlaylist = [];
-  int _currentIndex = 0;
-  int _currentLesson = 1;
+// ─────────────────────────────────────────────────────────────────────────────
+// Asset-manifest cache (loaded once, shared across the app lifetime)
+// ─────────────────────────────────────────────────────────────────────────────
+Map<String, dynamic>? _cachedManifest;
+
+Future<Map<String, dynamic>> _getManifest() async {
+  if (_cachedManifest != null) return _cachedManifest!;
+  try {
+    final json = await rootBundle.loadString('AssetManifest.json');
+    _cachedManifest = jsonDecode(json) as Map<String, dynamic>;
+  } catch (e) {
+    debugPrint('AssetManifest load error: $e');
+    _cachedManifest = {};
+  }
+  return _cachedManifest!;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AudioProvider
+// ─────────────────────────────────────────────────────────────────────────────
+class AudioProvider extends ChangeNotifier {
+  // Player – lazy-initialised
+  late final AudioPlayer _player;
+  bool _playerReady = false;
+
+  // Stream subscriptions (cancelled in dispose)
+  StreamSubscription<Duration>? _posSub;
+  StreamSubscription<Duration?>? _durSub;
+  StreamSubscription<PlayerState>? _stateSub;
+
+  // State
+  List<AudioFile> _playlist = [];
+  int _index = 0;
+  int _lesson = 1;
   bool _isPlaying = false;
   Duration _duration = Duration.zero;
   Duration _position = Duration.zero;
+  bool _isLoading = false;
+  String? _lastError;
+
+  // Position throttle – only notify UI if position changed by ≥ 500 ms
+  Duration _lastNotifiedPosition = Duration.zero;
+  static const _posThreshold = Duration(milliseconds: 500);
 
   static const int totalLessons = 50;
 
-  // Getters
-  List<AudioFile> get currentPlaylist => _currentPlaylist;
-  int get currentIndex => _currentIndex;
-  int get currentLesson => _currentLesson;
+  // ── Getters ────────────────────────────────────────────────────────────────
+  List<AudioFile> get currentPlaylist => _playlist;
+  int get currentIndex => _index;
+  int get currentLesson => _lesson;
   bool get isPlaying => _isPlaying;
   Duration get duration => _duration;
   Duration get position => _position;
+  bool get isLoading => _isLoading;
+  String? get lastError => _lastError;
 
   AudioFile? get currentAudio =>
-      _currentPlaylist.isNotEmpty && _currentIndex < _currentPlaylist.length
-          ? _currentPlaylist[_currentIndex]
+      _playlist.isNotEmpty && _index < _playlist.length
+          ? _playlist[_index]
           : null;
 
-  bool get hasNextLesson => _currentLesson < totalLessons;
-  bool get hasPreviousLesson => _currentLesson > 1;
-  bool get isFirstTrack => _currentIndex == 0;
-  bool get isLastTrack => _currentIndex >= _currentPlaylist.length - 1;
+  bool get hasNextLesson => _lesson < totalLessons;
+  bool get hasPreviousLesson => _lesson > 1;
+  bool get isFirstTrack => _index == 0;
+  bool get isLastTrack => _index >= _playlist.length - 1;
 
+  // ── Constructor ────────────────────────────────────────────────────────────
   AudioProvider() {
     _initPlayer();
   }
 
   void _initPlayer() {
-    _player.positionStream.listen((pos) {
-      _position = pos;
-      notifyListeners();
-    });
+    try {
+      _player = AudioPlayer();
+      _playerReady = true;
 
-    _player.durationStream.listen((dur) {
-      if (dur != null) {
-        _duration = dur;
-        notifyListeners();
-      }
-    });
+      // Position: throttled to avoid 60 Hz full-tree rebuilds
+      _posSub = _player.positionStream.listen((pos) {
+        _position = pos;
+        final delta = pos - _lastNotifiedPosition;
+        if (delta.abs() >= _posThreshold || pos == Duration.zero) {
+          _lastNotifiedPosition = pos;
+          notifyListeners();
+        }
+      });
 
-    _player.playerStateStream.listen((state) {
-      _isPlaying = state.playing;
-      notifyListeners();
-      if (state.processingState == ProcessingState.completed) {
-        _onTrackCompleted();
-      }
-    });
+      // Duration: notify only on actual change
+      _durSub = _player.durationStream.listen((dur) {
+        if (dur != null && dur != _duration) {
+          _duration = dur;
+          notifyListeners();
+        }
+      });
+
+      // Player state
+      _stateSub = _player.playerStateStream.listen((state) {
+        final playing = state.playing;
+        if (playing != _isPlaying) {
+          _isPlaying = playing;
+          notifyListeners();
+        }
+        if (state.processingState == ProcessingState.completed) {
+          _onTrackCompleted();
+        }
+      });
+    } catch (e) {
+      _lastError = 'Failed to initialise audio player: $e';
+      debugPrint(_lastError);
+    }
   }
 
-  Future<void> setPlaylist(List<AudioFile> files, int startIndex, int lessonNumber) async {
-    _currentPlaylist = List.from(files);
-    _currentIndex = startIndex.clamp(0, files.length - 1);
-    _currentLesson = lessonNumber;
-    notifyListeners();
+  // ── Playlist management ────────────────────────────────────────────────────
+  Future<void> setPlaylist(
+      List<AudioFile> files, int startIndex, int lessonNumber) async {
+    _playlist = List.from(files);
+    _index = startIndex.clamp(0, (files.length - 1).clamp(0, files.length));
+    _lesson = lessonNumber;
+    // No notifyListeners here — _playCurrentTrack will do it after load
     await _playCurrentTrack();
   }
 
   Future<void> _playCurrentTrack() async {
-    if (_currentPlaylist.isEmpty ||
-        _currentIndex < 0 ||
-        _currentIndex >= _currentPlaylist.length) return;
+    if (!_playerReady ||
+        _playlist.isEmpty ||
+        _index < 0 ||
+        _index >= _playlist.length) return;
+
+    _isLoading = true;
+    _lastError = null;
+    notifyListeners();
 
     try {
-      final audio = _currentPlaylist[_currentIndex];
+      final audio = _playlist[_index];
       await _player.setAsset(audio.assetPath);
-      await _player.play();
+      _isLoading = false;
       notifyListeners();
+      await _player.play();
     } catch (e) {
-      debugPrint('Error playing track: $e');
+      _isLoading = false;
+      _lastError = 'Could not play track: $e';
+      debugPrint(_lastError);
+      notifyListeners();
     }
   }
 
   Future<void> _onTrackCompleted() async {
-    if (_currentIndex < _currentPlaylist.length - 1) {
-      _currentIndex++;
+    if (_index < _playlist.length - 1) {
+      _index++;
       await _playCurrentTrack();
     } else if (hasNextLesson) {
-      await _changeLesson(_currentLesson + 1);
+      await _changeLesson(_lesson + 1);
     } else {
       await _player.seek(Duration.zero);
       await _player.pause();
-      notifyListeners();
     }
   }
 
   Future<void> _changeLesson(int lessonNumber) async {
     final files = await loadLessonFiles(lessonNumber);
     if (files.isNotEmpty) {
-      _currentPlaylist = files;
-      _currentIndex = 0;
-      _currentLesson = lessonNumber;
-      notifyListeners();
+      _playlist = files;
+      _index = 0;
+      _lesson = lessonNumber;
       await _playCurrentTrack();
     }
   }
 
-  /// Loads and validates audio files for a given lesson number.
+  // ── Static helpers ─────────────────────────────────────────────────────────
+
+  /// Loads audio files for a lesson using the cached manifest — no per-file
+  /// round-trips to rootBundle.
   static Future<List<AudioFile>> loadLessonFiles(int lessonNumber) async {
     try {
-      final fileNames = <String>[];
+      final manifest = await _getManifest();
+      final prefix = 'assets/audio/lesson_$lessonNumber/';
+      final seen = <String>{};
+      final files = <AudioFile>[];
 
-      try {
-        final manifestJson = await rootBundle.loadString('AssetManifest.json');
-        final manifest = json.decode(manifestJson) as Map<String, dynamic>;
-        final lessonPath = 'assets/audio/lesson_$lessonNumber';
-
+      if (manifest.isNotEmpty) {
         for (final key in manifest.keys) {
-          if (key.contains(lessonPath) && key.endsWith('.mp3')) {
+          if (key.startsWith(prefix) && key.endsWith('.mp3')) {
             final fileName = key.split('/').last;
-            if (!fileNames.contains(fileName)) {
-              fileNames.add(fileName);
+            if (seen.add(fileName)) {
+              files.add(AudioFile.fromFileName(fileName, lessonNumber));
             }
           }
         }
-      } catch (e) {
-        debugPrint('Could not load asset manifest: $e');
       }
 
-      // Fallback to predefined file names if manifest is empty
-      if (fileNames.isEmpty) {
-        fileNames.addAll([
+      // Fallback when manifest is unavailable (e.g., unit tests / simulators)
+      if (files.isEmpty) {
+        final candidates = [
           'l${lessonNumber}_main.mp3',
-          'l${lessonNumber}_q1.mp3',
-          'l${lessonNumber}_q2.mp3',
-          'l${lessonNumber}_q3.mp3',
-          'l${lessonNumber}_q4.mp3',
-        ]);
-      }
-
-      final files = <AudioFile>[];
-      for (final f in fileNames) {
-        final audioFile = AudioFile.fromFileName(f, lessonNumber);
-        try {
-          await rootBundle.load(audioFile.assetPath);
-          files.add(audioFile);
-        } catch (_) {
-          // Skip non-existent files silently
+          ...List.generate(
+              6, (i) => 'l${lessonNumber}_q${i + 1}.mp3'),
+        ];
+        for (final name in candidates) {
+          try {
+            await rootBundle.load('$prefix$name');
+            files.add(AudioFile.fromFileName(name, lessonNumber));
+          } catch (_) {}
         }
       }
 
       files.sort(AudioFile.sortAudioFiles);
       return files;
     } catch (e) {
-      debugPrint('Error loading lesson files: $e');
+      debugPrint('loadLessonFiles error: $e');
       return [];
     }
   }
 
-  // Playback controls
+  // ── Playback controls ──────────────────────────────────────────────────────
   Future<void> togglePlayPause() async {
-    if (_isPlaying) {
-      await _player.pause();
-    } else {
-      await _player.play();
-    }
+    if (!_playerReady) return;
+    _isPlaying ? await _player.pause() : await _player.play();
   }
 
   Future<void> playNext() async {
-    if (_currentIndex < _currentPlaylist.length - 1) {
-      _currentIndex++;
+    if (_index < _playlist.length - 1) {
+      _index++;
       await _playCurrentTrack();
     } else if (hasNextLesson) {
-      await _changeLesson(_currentLesson + 1);
+      await _changeLesson(_lesson + 1);
     }
   }
 
   Future<void> playPrevious() async {
     if (_position.inSeconds > 3) {
       await _player.seek(Duration.zero);
-    } else if (_currentIndex > 0) {
-      _currentIndex--;
+    } else if (_index > 0) {
+      _index--;
       await _playCurrentTrack();
     } else if (hasPreviousLesson) {
-      await _changeLesson(_currentLesson - 1);
+      await _changeLesson(_lesson - 1);
     }
   }
 
   Future<void> playNextLesson() async {
-    if (hasNextLesson) await _changeLesson(_currentLesson + 1);
+    if (hasNextLesson) await _changeLesson(_lesson + 1);
   }
 
   Future<void> playPreviousLesson() async {
-    if (hasPreviousLesson) await _changeLesson(_currentLesson - 1);
+    if (hasPreviousLesson) await _changeLesson(_lesson - 1);
   }
 
-  Future<void> seek(Duration position) async => _player.seek(position);
+  Future<void> seek(Duration position) async {
+    if (!_playerReady) return;
+    await _player.seek(position);
+  }
 
   Future<void> seekRelative(Duration offset) async {
-    final newMs = (_position + offset).inMilliseconds
-        .clamp(0, _duration.inMilliseconds);
+    if (!_playerReady) return;
+    final newMs =
+        (_position + offset).inMilliseconds.clamp(0, _duration.inMilliseconds);
     await _player.seek(Duration(milliseconds: newMs));
   }
 
-  String formatDuration(Duration duration) {
-    final minutes = duration.inMinutes;
-    final seconds = duration.inSeconds.remainder(60);
-    return '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}';
-  }
-
+  // ── Dispose ────────────────────────────────────────────────────────────────
   @override
   void dispose() {
-    _player.dispose();
+    _posSub?.cancel();
+    _durSub?.cancel();
+    _stateSub?.cancel();
+    if (_playerReady) _player.dispose();
     super.dispose();
   }
 }

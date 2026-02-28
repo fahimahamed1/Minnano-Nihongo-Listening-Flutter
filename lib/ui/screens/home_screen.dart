@@ -1,13 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lesson.dart';
 import 'lesson_detail_screen.dart';
 
+// Pre-computed colours
+const _creditBorder = Color(0x28E91E63);
+const _monBorder = Color(0x3CE91E63);
+const _headerShadow = Color(0x1EE91E63);
+const _badgeShadow = Color(0x50E91E63);
+const _cardShadow = Color(0x0A000000);
+
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  // Lessons computed once at class level (const list in model, no work here)
   static final List<Lesson> _lessons = Lesson.getAllLessons();
 
   @override
@@ -19,17 +28,19 @@ class HomeScreen extends StatelessWidget {
       child: Scaffold(
         body: Stack(
           children: [
-            Container(
+            DecoratedBox(
               decoration: const BoxDecoration(
                 gradient: AppColors.backgroundGradient,
               ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    _buildHeader(context),
-                    Expanded(child: _buildLessonList(context)),
-                    const SizedBox(height: 40),
-                  ],
+              child: SizedBox.expand(
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      _HomeHeader(),
+                      Expanded(child: _LessonList(lessons: _lessons)),
+                      const SizedBox(height: 52),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -44,92 +55,178 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+// ─────────────────────────────────────────────────────────────────────────────
+// Header
+// ─────────────────────────────────────────────────────────────────────────────
+class _HomeHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [
+          BoxShadow(
+              color: _headerShadow, blurRadius: 20, offset: Offset(0, 6)),
+        ],
+      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Left accent bar
+          Container(
+            width: 3,
+            height: 58,
+            margin: const EdgeInsets.only(right: 14),
+            decoration: BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          // Text block
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
+                const Text(
                   'みんなの日本語',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  style: TextStyle(
                     color: AppColors.primary,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 3,
+                    height: 1.1,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Minna no Nihongo Listening',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Text(
+                      'Minnano Nihongo',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontSize: 14,
+                            letterSpacing: 0.2,
+                          ),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryLight,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text(
+                        'LISTENING',
+                        style: TextStyle(
+                          color: AppColors.primary,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.0,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                const Text(
+                  '• 日 • 本 • 語 •',
+                  style: TextStyle(
+                    color: AppColors.textTertiary,
+                    fontSize: 10,
+                    letterSpacing: 4,
+                  ),
                 ),
               ],
             ),
           ),
+          // Circular seal badge
           Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: AppColors.primaryLight,
-              borderRadius: BorderRadius.circular(16),
+            width: 52,
+            height: 52,
+            decoration: const BoxDecoration(
+              gradient: AppColors.primaryGradient,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                    color: _badgeShadow,
+                    blurRadius: 12,
+                    offset: Offset(0, 4)),
+              ],
             ),
-            child: const Icon(
-              Icons.headphones_rounded,
-              color: AppColors.primary,
-              size: 28,
-            ),
+            child: const Icon(Icons.headphones_rounded,
+                color: Colors.white, size: 26),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildLessonList(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      itemCount: _lessons.length,
-      itemBuilder: (context, index) {
-        return _LessonCard(lesson: _lessons[index]);
-      },
+// ─────────────────────────────────────────────────────────────────────────────
+// Lesson list — RepaintBoundary keeps it isolated from footer/header repaints
+// ─────────────────────────────────────────────────────────────────────────────
+class _LessonList extends StatelessWidget {
+  final List<Lesson> lessons;
+  const _LessonList({required this.lessons});
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        cacheExtent: 400,
+        itemCount: lessons.length,
+        itemBuilder: (context, index) =>
+            _LessonCard(lesson: lessons[index]),
+      ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Lesson card
+// ─────────────────────────────────────────────────────────────────────────────
 class _LessonCard extends StatelessWidget {
   final Lesson lesson;
-
   const _LessonCard({required this.lesson});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Material(
+      margin: const EdgeInsets.only(bottom: 9),
+      decoration: BoxDecoration(
         color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(color: _cardShadow, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
         borderRadius: BorderRadius.circular(16),
         child: InkWell(
           onTap: () => _navigate(context),
           borderRadius: BorderRadius.circular(16),
           child: Padding(
-            padding: const EdgeInsets.all(14),
+            padding: const EdgeInsets.all(13),
             child: Row(
               children: [
-                _LessonNumberBadge(number: lesson.number),
-                const SizedBox(width: 14),
+                _LessonBadge(number: lesson.number),
+                const SizedBox(width: 13),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        lesson.formattedTitle,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                      Text(lesson.formattedTitle,
+                          style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 2),
-                      Text(
-                        lesson.titleJp,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      Text(lesson.titleJp,
+                          style: Theme.of(context).textTheme.bodySmall),
                     ],
                   ),
                 ),
@@ -137,12 +234,10 @@ class _LessonCard extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: AppColors.primaryLight,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.play_arrow_rounded,
-                    color: AppColors.primary,
-                  ),
+                  child: const Icon(Icons.play_arrow_rounded,
+                      color: AppColors.primary, size: 20),
                 ),
               ],
             ),
@@ -154,19 +249,13 @@ class _LessonCard extends StatelessWidget {
 
   void _navigate(BuildContext context) {
     HapticFeedback.lightImpact();
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => LessonDetailScreen(lesson: lesson),
-      ),
-    );
+    Navigator.push(context, lessonDetailRoute(lesson));
   }
 }
 
-class _LessonNumberBadge extends StatelessWidget {
+class _LessonBadge extends StatelessWidget {
   final int number;
-
-  const _LessonNumberBadge({required this.number});
+  const _LessonBadge({required this.number});
 
   @override
   Widget build(BuildContext context) {
@@ -181,22 +270,21 @@ class _LessonNumberBadge extends StatelessWidget {
       child: Text(
         '$number',
         style: const TextStyle(
-          color: Colors.white,
-          fontSize: 18,
-          fontWeight: FontWeight.bold,
-        ),
+            color: Colors.white, fontSize: 17, fontWeight: FontWeight.bold),
       ),
     );
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Developer credit footer
+// ─────────────────────────────────────────────────────────────────────────────
 class _DeveloperCredit extends StatelessWidget {
   const _DeveloperCredit();
 
   Future<void> _launch(String url) async {
-    final uri = Uri.parse(url);
     try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } catch (e) {
       debugPrint('Could not launch $url: $e');
     }
@@ -205,44 +293,73 @@ class _DeveloperCredit extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: Colors.white.withAlpha(242),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: _creditBorder, width: 1)),
+      ),
       child: SafeArea(
         top: false,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'Developed with ❤️ by ',
-              style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
-            ),
-            GestureDetector(
-              onTap: () => _launch('https://www.facebook.com/fahimahamed4'),
-              child: const Text(
-                'Fahim Ahamed',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
+        child: Padding(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          child: Row(
+            children: [
+              // Japanese mon circle
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _monBorder, width: 1),
+                ),
+                child: const Center(
+                  child: Text('和',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600)),
                 ),
               ),
-            ),
-            const Text(
-              ' & ',
-              style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
-            ),
-            GestureDetector(
-              onTap: () => _launch('https://www.facebook.com/fahadahamed4'),
-              child: const Text(
-                'Fahad Ahamed',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: AppColors.primary,
-                  fontWeight: FontWeight.w500,
+              const SizedBox(width: 10),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Text('Crafted with ❤️ by ',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textTertiary)),
+                    GestureDetector(
+                      onTap: () =>
+                          _launch('https://www.facebook.com/fahimahamed4'),
+                      child: const Text('Fahim Ahamed',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const Text(' & ',
+                        style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textTertiary)),
+                    GestureDetector(
+                      onTap: () =>
+                          _launch('https://www.facebook.com/fahadahamed4'),
+                      child: const Text('Fahad Ahamed',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
                 ),
               ),
-            ),
-          ],
+              const Text('v3.3.0',
+                  style: TextStyle(
+                      fontSize: 9,
+                      color: AppColors.textTertiary,
+                      letterSpacing: 0.5)),
+            ],
+          ),
         ),
       ),
     );
