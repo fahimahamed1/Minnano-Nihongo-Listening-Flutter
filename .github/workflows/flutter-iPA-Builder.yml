@@ -1,47 +1,70 @@
-name: iOS IPA Build
+name: iOS Build
 
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
-  build-ios:
-    name: 🎉 iOS Build
+  build:
+    name: Build IPA
     runs-on: macos-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
 
-      - uses: subosito/flutter-action@v2
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
           architecture: x64
 
-      - run: flutter pub get
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+          BUILD=$(grep 'version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
-      - run: pod repo update
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Update pods
         working-directory: ios
+        run: pod repo update
 
-      - run: flutter build ios --release --no-codesign
+      - name: Build iOS
+        run: flutter build ios --release --no-codesign
 
-      - run: mkdir Payload
+      - name: Create IPA
         working-directory: build/ios/iphoneos
+        run: |
+          mkdir -p Payload
+          mv Runner.app Payload/
+          zip -qr -9 MinnanoNihongo.ipa Payload
 
-      - run: mv Runner.app/ Payload
-        working-directory: build/ios/iphoneos
-
-      - name: Zip output
-        run: zip -qq -r -9 MinnanoNihongo-v2.0.0.ipa Payload
-        working-directory: build/ios/iphoneos
-
-      - name: Upload IPA to release
+      - name: Upload to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/MinnanoNihongo-v2.0.0.ipa
-          tag: v2.0.0
+          file: build/ios/iphoneos/MinnanoNihongo.ipa
+          asset_name: MinnanoNihongo-${{ steps.version.outputs.tag }}.ipa
+          tag: ${{ steps.version.outputs.tag }}
           overwrite: true
-          body: "Minnano Nihongo Listening v2.0.0 - iOS Build"
+          body: |
+            Minnano Nihongo Listening ${{ steps.version.outputs.tag }}
+
+            iOS Release Build (Unsigned IPA)
+
+            Features:
+            - 50 Japanese listening lessons
+            - Auto-next lesson navigation
+            - Smooth animations
+            - Optimized performance
+
+            Developed by Fahim Ahamed & Fahad Ahamed

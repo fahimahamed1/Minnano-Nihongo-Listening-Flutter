@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,71 +26,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
   }
 
   Future<void> _loadAudioFiles() async {
-    try {
-      List<String> fileNames = [];
-      
-      // Load from asset manifest
-      try {
-        final manifestJson = await rootBundle.loadString('AssetManifest.json');
-        final Map<String, dynamic> manifest = json.decode(manifestJson);
-        
-        final lessonPath = 'assets/audio/lesson_${widget.lesson.number}';
-        
-        for (var key in manifest.keys) {
-          if (key.contains(lessonPath) && key.endsWith('.mp3')) {
-            final fileName = key.split('/').last;
-            if (!fileNames.contains(fileName)) {
-              fileNames.add(fileName);
-            }
-          }
-        }
-      } catch (e) {
-        debugPrint('Could not load asset manifest: $e');
-      }
-      
-      // If no files found, use predefined list
-      if (fileNames.isEmpty) {
-        fileNames = _getPredefinedFiles();
-      }
-      
-      // Convert to AudioFile objects and verify
-      final files = <AudioFile>[];
-      for (var f in fileNames) {
-        final audioFile = AudioFile.fromFileName(f, widget.lesson.number);
-        try {
-          await rootBundle.load(audioFile.assetPath);
-          files.add(audioFile);
-        } catch (e) {
-          // Skip non-existent files
-        }
-      }
-      
-      files.sort(AudioFile.sortAudioFiles);
-      
-      if (mounted) {
-        setState(() {
-          _audioFiles = files;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+    final files = await AudioProvider.loadLessonFiles(widget.lesson.number);
+    if (mounted) {
+      setState(() {
+        _audioFiles = files;
+        _isLoading = false;
+      });
     }
-  }
-
-  List<String> _getPredefinedFiles() {
-    final lesson = widget.lesson.number;
-    return [
-      'l${lesson}_main.mp3',
-      'l${lesson}_q1.mp3',
-      'l${lesson}_q2.mp3',
-      'l${lesson}_q3.mp3',
-      'l${lesson}_q4.mp3',
-    ];
   }
 
   @override
@@ -99,19 +40,14 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0xFFFCE4EC), Color(0xFFFAFAFA)],
-            stops: [0.0, 0.3],
-          ),
+          gradient: AppColors.backgroundGradient,
         ),
         child: SafeArea(
           child: Column(
             children: [
-              _buildHeader(),
+              _buildHeader(context),
               Expanded(
-                child: _isLoading ? _buildLoading() : _buildAudioList(),
+                child: _isLoading ? _buildLoading() : _buildContent(),
               ),
             ],
           ),
@@ -120,13 +56,13 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     );
   }
 
-  Widget _buildHeader() {
+  Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
           Material(
-            color: Colors.white,
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(12),
             elevation: 1,
             child: InkWell(
@@ -177,15 +113,22 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
     );
   }
 
-  Widget _buildAudioList() {
+  Widget _buildContent() {
     if (_audioFiles.isEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.music_off_rounded, size: 48, color: AppColors.textTertiary),
+            const Icon(
+              Icons.music_off_rounded,
+              size: 48,
+              color: AppColors.textTertiary,
+            ),
             const SizedBox(height: 12),
-            Text('No audio files', style: TextStyle(color: AppColors.textSecondary)),
+            Text(
+              'No audio files available',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
           ],
         ),
       );
@@ -195,47 +138,69 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
       itemCount: _audioFiles.length,
       itemBuilder: (context, index) {
-        return _buildAudioCard(_audioFiles[index], index);
+        return _AudioCard(
+          audio: _audioFiles[index],
+          onTap: () => _playAudio(index),
+        );
       },
     );
   }
 
-  Widget _buildAudioCard(AudioFile audio, int index) {
-    return Consumer<AudioProvider>(
-      builder: (context, audioProvider, child) {
-        final isPlaying = audioProvider.currentAudio?.uniqueId == audio.uniqueId &&
-            audioProvider.isPlaying;
+  void _playAudio(int index) {
+    HapticFeedback.lightImpact();
+    context.read<AudioProvider>().setPlaylist(
+          _audioFiles,
+          index,
+          widget.lesson.number,
+        );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const PlayerScreen()),
+    );
+  }
+}
 
+class _AudioCard extends StatelessWidget {
+  final AudioFile audio;
+  final VoidCallback onTap;
+
+  const _AudioCard({required this.audio, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Selector<AudioProvider, bool>(
+      selector: (_, p) =>
+          p.currentAudio?.uniqueId == audio.uniqueId && p.isPlaying,
+      builder: (context, isActive, _) {
         return Container(
           margin: const EdgeInsets.only(bottom: 8),
-          child: Material(
-            color: Colors.white,
+          decoration: BoxDecoration(
+            color: AppColors.surface,
             borderRadius: BorderRadius.circular(12),
+            border: isActive
+                ? Border.all(color: AppColors.primary, width: 2)
+                : null,
+          ),
+          child: Material(
+            color: Colors.transparent,
             child: InkWell(
               borderRadius: BorderRadius.circular(12),
-              onTap: () => _playAudio(index),
-              child: Container(
+              onTap: onTap,
+              child: Padding(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: isPlaying
-                      ? Border.all(color: AppColors.primary, width: 2)
-                      : null,
-                ),
                 child: Row(
                   children: [
                     Container(
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: isPlaying ? AppColors.primary : AppColors.primaryLight,
+                        color: isActive ? AppColors.primary : AppColors.primaryLight,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Center(
-                        child: isPlaying
-                            ? const Icon(Icons.pause_rounded, color: Colors.white, size: 24)
-                            : Text(audio.emoji, style: const TextStyle(fontSize: 22)),
-                      ),
+                      alignment: Alignment.center,
+                      child: isActive
+                          ? const Icon(Icons.pause_rounded, color: Colors.white, size: 24)
+                          : Text(audio.typeIcon, style: const TextStyle(fontSize: 22)),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -248,7 +213,7 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _getAudioDescription(audio.type),
+                            audio.typeDescription,
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
@@ -273,32 +238,6 @@ class _LessonDetailScreenState extends State<LessonDetailScreen> {
           ),
         );
       },
-    );
-  }
-
-  String _getAudioDescription(AudioType type) {
-    switch (type) {
-      case AudioType.main:
-        return 'Main dialogue';
-      case AudioType.question:
-        return 'Listening question';
-      case AudioType.practice:
-        return 'Practice';
-      case AudioType.vocabulary:
-        return 'Vocabulary';
-      case AudioType.grammar:
-        return 'Grammar';
-      case AudioType.other:
-        return 'Audio';
-    }
-  }
-
-  void _playAudio(int index) {
-    HapticFeedback.lightImpact();
-    context.read<AudioProvider>().setPlaylist(_audioFiles, index, widget.lesson.number);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const PlayerScreen()),
     );
   }
 }

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 
 class Lesson {
   final int number;
@@ -78,6 +78,7 @@ enum AudioType {
   other,
 }
 
+@immutable
 class AudioFile {
   final String fileName;
   final String displayName;
@@ -112,7 +113,7 @@ class AudioFile {
     }
   }
 
-  String get emoji {
+  String get typeIcon {
     switch (type) {
       case AudioType.main:
         return '🎵';
@@ -126,6 +127,23 @@ class AudioFile {
         return '📚';
       case AudioType.other:
         return '🎶';
+    }
+  }
+
+  String get typeDescription {
+    switch (type) {
+      case AudioType.main:
+        return 'Main dialogue';
+      case AudioType.question:
+        return 'Listening question';
+      case AudioType.practice:
+        return 'Practice';
+      case AudioType.vocabulary:
+        return 'Vocabulary';
+      case AudioType.grammar:
+        return 'Grammar';
+      case AudioType.other:
+        return 'Audio';
     }
   }
 

@@ -1,41 +1,64 @@
-name: Android APK Build
+name: Android Build
 
 on:
   workflow_dispatch:
+  push:
+    tags: ['v*']
 
 permissions:
   contents: write
 
 jobs:
-  build-android:
-    name: 🤖 Android Build
+  build:
+    name: Build APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v3
 
-      - uses: actions/setup-java@v3
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
+          distribution: temurin
           java-version: '17'
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
-          channel: 'stable'
+          channel: stable
 
-      - name: Get dependencies
+      - name: Get version
+        id: version
+        run: |
+          VERSION=$(grep 'version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f1)
+          BUILD=$(grep 'version:' pubspec.yaml | sed 's/version: //' | cut -d'+' -f2)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "build=$BUILD" >> $GITHUB_OUTPUT
+          echo "tag=v$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK (release)
+      - name: Build APK
         run: flutter build apk --release
 
-      - name: Upload APK to release
+      - name: Upload to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/app/outputs/flutter-apk/app-release.apk
-          asset_name: MinnanoNihongo-v2.0.0.apk
-          tag: v2.0.0
+          asset_name: MinnanoNihongo-${{ steps.version.outputs.tag }}.apk
+          tag: ${{ steps.version.outputs.tag }}
           overwrite: true
-          body: "Minnano Nihongo Listening v2.0.0 - Android Build"
+          body: |
+            Minnano Nihongo Listening ${{ steps.version.outputs.tag }}
+
+            Android Release Build
+
+            Features:
+            - 50 Japanese listening lessons
+            - Auto-next lesson navigation
+            - Smooth animations
+            - Optimized performance
+
+            Developed by Fahim Ahamed & Fahad Ahamed

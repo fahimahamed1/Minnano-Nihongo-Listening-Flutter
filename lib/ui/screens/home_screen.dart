@@ -8,6 +8,8 @@ import 'lesson_detail_screen.dart';
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
+  static final List<Lesson> _lessons = Lesson.getAllLessons();
+
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -19,15 +21,7 @@ class HomeScreen extends StatelessWidget {
           children: [
             Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0xFFFCE4EC),
-                    Color(0xFFFAFAFA),
-                  ],
-                  stops: [0.0, 0.3],
-                ),
+                gradient: AppColors.backgroundGradient,
               ),
               child: SafeArea(
                 child: Column(
@@ -63,7 +57,6 @@ class HomeScreen extends StatelessWidget {
                 Text(
                   'みんなの日本語',
                   style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
                     color: AppColors.primary,
                   ),
                 ),
@@ -78,7 +71,7 @@ class HomeScreen extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
+              color: AppColors.primaryLight,
               borderRadius: BorderRadius.circular(16),
             ),
             child: const Icon(
@@ -93,41 +86,36 @@ class HomeScreen extends StatelessWidget {
   }
 
   Widget _buildLessonList(BuildContext context) {
-    final lessons = Lesson.getAllLessons();
-    
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      itemCount: lessons.length,
+      itemCount: _lessons.length,
       itemBuilder: (context, index) {
-        return _buildLessonCard(context, lessons[index]);
+        return _LessonCard(lesson: _lessons[index]);
       },
     );
   }
+}
 
-  Widget _buildLessonCard(BuildContext context, Lesson lesson) {
+class _LessonCard extends StatelessWidget {
+  final Lesson lesson;
+
+  const _LessonCard({required this.lesson});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.transparent,
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
         child: InkWell(
-          onTap: () => _navigateToLesson(context, lesson),
+          onTap: () => _navigate(context),
           borderRadius: BorderRadius.circular(16),
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
             child: Row(
               children: [
-                _buildLessonNumber(lesson),
+                _LessonNumberBadge(number: lesson.number),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
@@ -140,9 +128,7 @@ class HomeScreen extends StatelessWidget {
                       const SizedBox(height: 2),
                       Text(
                         lesson.titleJp,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
@@ -166,28 +152,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildLessonNumber(Lesson lesson) {
-    return Container(
-      width: 46,
-      height: 46,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Center(
-        child: Text(
-          '${lesson.number}',
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _navigateToLesson(BuildContext context, Lesson lesson) {
+  void _navigate(BuildContext context) {
     HapticFeedback.lightImpact();
     Navigator.push(
       context,
@@ -198,20 +163,42 @@ class HomeScreen extends StatelessWidget {
   }
 }
 
+class _LessonNumberBadge extends StatelessWidget {
+  final int number;
+
+  const _LessonNumberBadge({required this.number});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 46,
+      height: 46,
+      decoration: BoxDecoration(
+        gradient: AppColors.primaryGradient,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        '$number',
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+}
+
 class _DeveloperCredit extends StatelessWidget {
   const _DeveloperCredit();
 
-  Future<void> _launchUrl(BuildContext context, String url) async {
+  Future<void> _launch(String url) async {
     final uri = Uri.parse(url);
     try {
-      final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!launched) {
-        // Try with platform default
-        await launchUrl(uri);
-      }
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     } catch (e) {
-      // Silently fail - user may not have Facebook app
-      debugPrint('Could not launch URL: $url');
+      debugPrint('Could not launch $url: $e');
     }
   }
 
@@ -219,16 +206,7 @@ class _DeveloperCredit extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
+      color: Colors.white.withAlpha(242),
       child: SafeArea(
         top: false,
         child: Row(
@@ -236,39 +214,31 @@ class _DeveloperCredit extends StatelessWidget {
           children: [
             const Text(
               'Developed with ❤️ by ',
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.textTertiary,
-              ),
+              style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
             ),
             GestureDetector(
-              onTap: () => _launchUrl(context, 'https://www.facebook.com/fahimahamed4'),
+              onTap: () => _launch('https://www.facebook.com/fahimahamed4'),
               child: const Text(
                 'Fahim Ahamed',
                 style: TextStyle(
                   fontSize: 10,
                   color: AppColors.primary,
                   fontWeight: FontWeight.w500,
-                  decoration: TextDecoration.none,
                 ),
               ),
             ),
             const Text(
               ' & ',
-              style: TextStyle(
-                fontSize: 10,
-                color: AppColors.textTertiary,
-              ),
+              style: TextStyle(fontSize: 10, color: AppColors.textTertiary),
             ),
             GestureDetector(
-              onTap: () => _launchUrl(context, 'https://www.facebook.com/fahadahamed4'),
+              onTap: () => _launch('https://www.facebook.com/fahadahamed4'),
               child: const Text(
                 'Fahad Ahamed',
                 style: TextStyle(
                   fontSize: 10,
                   color: AppColors.primary,
                   fontWeight: FontWeight.w500,
-                  decoration: TextDecoration.none,
                 ),
               ),
             ),

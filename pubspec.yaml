@@ -1,7 +1,7 @@
 name: minnano_nihongo_listening
-description: A beautiful Japanese language learning app featuring audio lessons from Minna no Nihongo.
+description: A Japanese language learning app featuring audio lessons from Minna no Nihongo.
 publish_to: 'none'
-version: 2.0.0+2
+version: 2.1.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.6
   just_audio: ^0.9.36
   provider: ^6.1.1
   url_launcher: ^6.2.2
@@ -21,7 +20,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
     - assets/audio/
     - assets/audio/lesson_1/

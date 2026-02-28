@@ -7,13 +7,9 @@ import 'ui/screens/home_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Lock orientation before app starts
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]);
-  
-  // Set system UI style to match splash screen
+
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -31,19 +27,17 @@ class MinnanoNihongoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(create: (_) => AudioProvider()),
-        ChangeNotifierProvider(create: (_) => LessonProvider()),
-      ],
+    return ChangeNotifierProvider(
+      create: (_) => AudioProvider(),
       child: MaterialApp(
         title: 'Minnano Nihongo',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
-        // Ensure smooth transition from splash
         builder: (context, child) {
           return MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: TextScaler.noScaling),
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.noScaling,
+            ),
             child: child!,
           );
         },

@@ -11,80 +11,67 @@ class PlayerScreen extends StatefulWidget {
   State<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMixin {
-  late AnimationController _coverController;
-  late Animation<double> _coverAnimation;
+class _PlayerScreenState extends State<PlayerScreen>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _spinController;
+  late final Animation<double> _spinAnimation;
 
   @override
   void initState() {
     super.initState();
-    _coverController = AnimationController(
+    _spinController = AnimationController(
       duration: const Duration(seconds: 20),
       vsync: this,
     );
-    _coverAnimation = Tween<double>(begin: 0, end: 1).animate(_coverController);
-    
-    final audioProvider = context.read<AudioProvider>();
-    if (audioProvider.isPlaying) {
-      _coverController.repeat();
+    _spinAnimation = Tween<double>(begin: 0, end: 1).animate(_spinController);
+
+    if (context.read<AudioProvider>().isPlaying) {
+      _spinController.repeat();
     }
-    
-    // Listen for lesson changes
-    audioProvider.onLessonChanged = (lessonNumber) {
-      HapticFeedback.mediumImpact();
-    };
   }
 
   @override
   void dispose() {
-    _coverController.dispose();
+    _spinController.dispose();
     super.dispose();
+  }
+
+  void _syncAnimation(bool isPlaying) {
+    if (isPlaying) {
+      if (!_spinController.isAnimating) _spinController.repeat();
+    } else {
+      if (_spinController.isAnimating) _spinController.stop();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Consumer<AudioProvider>(
-        builder: (context, audioProvider, child) {
-          final currentAudio = audioProvider.currentAudio;
-          
-          // Control animation
-          if (audioProvider.isPlaying) {
-            if (!_coverController.isAnimating) _coverController.repeat();
-          } else {
-            if (_coverController.isAnimating) _coverController.stop();
-          }
-
+        builder: (context, audio, _) {
+          _syncAnimation(audio.isPlaying);
           return Container(
             decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Color(0xFF1A1A2E),
-                  Color(0xFF16213E),
-                  Color(0xFF0F3460),
-                ],
-              ),
+              gradient: AppColors.playerGradient,
             ),
             child: SafeArea(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
                 child: Column(
                   children: [
-                    _buildAppBar(audioProvider),
+                    _PlayerAppBar(audio: audio),
                     const Spacer(flex: 2),
-                    _buildCoverArt(audioProvider),
+                    _CoverArt(animation: _spinAnimation),
                     const SizedBox(height: 32),
-                    _buildTrackInfo(currentAudio, audioProvider),
+                    _TrackInfo(audio: audio),
                     const SizedBox(height: 8),
-                    _buildTrackProgress(audioProvider),
-                    const SizedBox(height: 24),
-                    _buildProgressBar(audioProvider),
+                    _TrackCounter(audio: audio),
                     const SizedBox(height: 20),
-                    _buildControls(audioProvider),
+                    _SeekBar(audio: audio),
+                    const SizedBox(height: 20),
+                    _Controls(audio: audio),
                     const SizedBox(height: 16),
-                    _buildLessonNavigation(audioProvider),
+                    _LessonNav(audio: audio),
                     const Spacer(flex: 3),
                   ],
                 ),
@@ -95,8 +82,14 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       ),
     );
   }
+}
 
-  Widget _buildAppBar(AudioProvider audioProvider) {
+class _PlayerAppBar extends StatelessWidget {
+  final AudioProvider audio;
+  const _PlayerAppBar({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
     return Row(
       children: [
         IconButton(
@@ -104,10 +97,14 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
           icon: Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
+              color: Colors.white.withAlpha(25),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.keyboard_arrow_down_rounded, color: Colors.white, size: 24),
+            child: const Icon(
+              Icons.keyboard_arrow_down_rounded,
+              color: Colors.white,
+              size: 24,
+            ),
           ),
         ),
         Expanded(
@@ -116,14 +113,14 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
               Text(
                 'Now Playing',
                 style: TextStyle(
-                  color: Colors.white.withOpacity(0.6),
+                  color: Colors.white.withAlpha(153),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               const SizedBox(height: 2),
               Text(
-                '第${audioProvider.currentLesson}課',
+                '第${audio.currentLesson}課',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 14,
@@ -137,16 +134,20 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       ],
     );
   }
+}
 
-  Widget _buildCoverArt(AudioProvider audioProvider) {
+class _CoverArt extends StatelessWidget {
+  final Animation<double> animation;
+  const _CoverArt({required this.animation});
+
+  @override
+  Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _coverAnimation,
-      builder: (context, child) {
-        return Transform.rotate(
-          angle: _coverAnimation.value * 2 * 3.14159,
-          child: child,
-        );
-      },
+      animation: animation,
+      builder: (_, child) => Transform.rotate(
+        angle: animation.value * 2 * 3.14159,
+        child: child,
+      ),
       child: Container(
         width: 180,
         height: 180,
@@ -155,101 +156,117 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
           gradient: AppColors.primaryGradient,
           boxShadow: [
             BoxShadow(
-              color: AppColors.primary.withOpacity(0.4),
+              color: AppColors.primary.withAlpha(102),
               blurRadius: 40,
               spreadRadius: 10,
             ),
           ],
         ),
-        child: Center(
-          child: Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: const Color(0xFF1A1A2E),
-              border: Border.all(
-                color: AppColors.primary.withOpacity(0.5),
-                width: 3,
-              ),
-            ),
-            child: const Center(
-              child: Text('🌸', style: TextStyle(fontSize: 44)),
+        alignment: Alignment.center,
+        child: Container(
+          width: 140,
+          height: 140,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF1A1A2E),
+            border: Border.all(
+              color: AppColors.primary.withAlpha(128),
+              width: 3,
             ),
           ),
+          alignment: Alignment.center,
+          child: const Text('🌸', style: TextStyle(fontSize: 44)),
         ),
       ),
     );
   }
+}
 
-  Widget _buildTrackInfo(currentAudio, AudioProvider audioProvider) {
+class _TrackInfo extends StatelessWidget {
+  final AudioProvider audio;
+  const _TrackInfo({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       children: [
         Text(
-          currentAudio?.formattedDisplayName ?? 'No track',
+          audio.currentAudio?.formattedDisplayName ?? 'No track',
           style: const TextStyle(
             color: Colors.white,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
           textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
           decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.1),
+            color: Colors.white.withAlpha(25),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Text(
-            'Lesson ${audioProvider.currentLesson} of ${audioProvider.totalLessons}',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontSize: 12,
-            ),
+            'Lesson ${audio.currentLesson} of ${AudioProvider.totalLessons}',
+            style: const TextStyle(color: Colors.white70, fontSize: 12),
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _buildTrackProgress(AudioProvider audioProvider) {
-    if (audioProvider.currentPlaylist.isEmpty) return const SizedBox.shrink();
-    
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            'Track ${audioProvider.currentIndex + 1}',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 11,
-            ),
+class _TrackCounter extends StatelessWidget {
+  final AudioProvider audio;
+  const _TrackCounter({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
+    if (audio.currentPlaylist.isEmpty) return const SizedBox.shrink();
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Track ${audio.currentIndex + 1}',
+          style: TextStyle(
+            color: Colors.white.withAlpha(128),
+            fontSize: 11,
           ),
-          Container(
-            margin: const EdgeInsets.symmetric(horizontal: 8),
-            width: 4,
-            height: 4,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.3),
-              shape: BoxShape.circle,
-            ),
+        ),
+        Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8),
+          width: 4,
+          height: 4,
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(76),
+            shape: BoxShape.circle,
           ),
-          Text(
-            '${audioProvider.currentPlaylist.length} total',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.5),
-              fontSize: 11,
-            ),
+        ),
+        Text(
+          '${audio.currentPlaylist.length} total',
+          style: TextStyle(
+            color: Colors.white.withAlpha(128),
+            fontSize: 11,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
+}
 
-  Widget _buildProgressBar(AudioProvider audioProvider) {
+class _SeekBar extends StatelessWidget {
+  final AudioProvider audio;
+  const _SeekBar({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
+    final maxMs = audio.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity);
+    final currentMs = audio.position.inMilliseconds
+        .clamp(0, audio.duration.inMilliseconds)
+        .toDouble();
+
     return Column(
       children: [
         SliderTheme(
@@ -258,18 +275,14 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
             overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
             activeTrackColor: AppColors.primary,
-            inactiveTrackColor: Colors.white.withOpacity(0.2),
+            inactiveTrackColor: Colors.white.withAlpha(51),
             thumbColor: AppColors.primary,
-            overlayColor: AppColors.primary.withOpacity(0.3),
+            overlayColor: AppColors.primary.withAlpha(76),
           ),
           child: Slider(
-            value: audioProvider.duration.inMilliseconds > 0
-                ? audioProvider.position.inMilliseconds
-                    .clamp(0, audioProvider.duration.inMilliseconds)
-                    .toDouble()
-                : 0,
-            max: audioProvider.duration.inMilliseconds.toDouble().clamp(1.0, double.infinity),
-            onChanged: (value) => audioProvider.seek(Duration(milliseconds: value.round())),
+            value: currentMs,
+            max: maxMs,
+            onChanged: (v) => audio.seek(Duration(milliseconds: v.round())),
           ),
         ),
         Padding(
@@ -278,12 +291,12 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                audioProvider.formatDuration(audioProvider.position),
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                audio.formatDuration(audio.position),
+                style: TextStyle(color: Colors.white.withAlpha(128), fontSize: 11),
               ),
               Text(
-                audioProvider.formatDuration(audioProvider.duration),
-                style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
+                audio.formatDuration(audio.duration),
+                style: TextStyle(color: Colors.white.withAlpha(128), fontSize: 11),
               ),
             ],
           ),
@@ -291,78 +304,166 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       ],
     );
   }
+}
 
-  Widget _buildControls(AudioProvider audioProvider) {
+class _Controls extends StatelessWidget {
+  final AudioProvider audio;
+  const _Controls({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
+    final canGoPrev = !audio.isFirstTrack || audio.hasPreviousLesson;
+    final canGoNext = !audio.isLastTrack || audio.hasNextLesson;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildControlButton(
+        _ControlButton(
           icon: Icons.replay_10_rounded,
           size: 22,
-          onPressed: () => audioProvider.seekRelative(const Duration(seconds: -10)),
+          onPressed: () => audio.seekRelative(const Duration(seconds: -10)),
         ),
         const SizedBox(width: 12),
-        _buildControlButton(
+        _ControlButton(
           icon: Icons.skip_previous_rounded,
           size: 28,
-          onPressed: audioProvider.hasPreviousLesson || !audioProvider.isFirstTrack
-              ? audioProvider.playPrevious
-              : null,
+          onPressed: canGoPrev ? audio.playPrevious : null,
         ),
         const SizedBox(width: 12),
-        _buildPlayButton(audioProvider),
+        _PlayButton(audio: audio),
         const SizedBox(width: 12),
-        _buildControlButton(
+        _ControlButton(
           icon: Icons.skip_next_rounded,
           size: 28,
-          onPressed: audioProvider.hasNextLesson || !audioProvider.isLastTrack
-              ? audioProvider.playNext
-              : null,
+          onPressed: canGoNext ? audio.playNext : null,
         ),
         const SizedBox(width: 12),
-        _buildControlButton(
+        _ControlButton(
           icon: Icons.forward_10_rounded,
           size: 22,
-          onPressed: () => audioProvider.seekRelative(const Duration(seconds: 10)),
+          onPressed: () => audio.seekRelative(const Duration(seconds: 10)),
         ),
       ],
     );
   }
+}
 
-  Widget _buildLessonNavigation(AudioProvider audioProvider) {
+class _PlayButton extends StatelessWidget {
+  final AudioProvider audio;
+  const _PlayButton({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        audio.togglePlayPause();
+      },
+      child: Container(
+        width: 64,
+        height: 64,
+        decoration: BoxDecoration(
+          gradient: AppColors.primaryGradient,
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primary.withAlpha(128),
+              blurRadius: 20,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          audio.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+          color: Colors.white,
+          size: 34,
+        ),
+      ),
+    );
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final double size;
+  final VoidCallback? onPressed;
+
+  const _ControlButton({
+    required this.icon,
+    required this.size,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: onPressed != null ? 1.0 : 0.3,
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white.withAlpha(25),
+          shape: BoxShape.circle,
+        ),
+        child: IconButton(
+          onPressed: onPressed != null
+              ? () {
+                  HapticFeedback.lightImpact();
+                  onPressed!();
+                }
+              : null,
+          icon: Icon(icon, color: Colors.white, size: size),
+          padding: const EdgeInsets.all(10),
+        ),
+      ),
+    );
+  }
+}
+
+class _LessonNav extends StatelessWidget {
+  final AudioProvider audio;
+  const _LessonNav({required this.audio});
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 40),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _buildLessonButton(
+          _LessonNavButton(
             icon: Icons.fast_rewind_rounded,
             label: 'Prev Lesson',
-            enabled: audioProvider.hasPreviousLesson,
-            onPressed: audioProvider.playPreviousLesson,
+            enabled: audio.hasPreviousLesson,
+            onPressed: audio.playPreviousLesson,
           ),
-          Container(
-            width: 1,
-            height: 24,
-            color: Colors.white.withOpacity(0.1),
-          ),
-          _buildLessonButton(
+          Container(width: 1, height: 24, color: Colors.white.withAlpha(25)),
+          _LessonNavButton(
             icon: Icons.fast_forward_rounded,
             label: 'Next Lesson',
-            enabled: audioProvider.hasNextLesson,
-            onPressed: audioProvider.playNextLesson,
+            enabled: audio.hasNextLesson,
+            onPressed: audio.playNextLesson,
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildLessonButton({
-    required IconData icon,
-    required String label,
-    required bool enabled,
-    required VoidCallback onPressed,
-  }) {
+class _LessonNavButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool enabled;
+  final VoidCallback onPressed;
+
+  const _LessonNavButton({
+    required this.icon,
+    required this.label,
+    required this.enabled,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: enabled
           ? () {
@@ -373,6 +474,7 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
       child: Opacity(
         opacity: enabled ? 1.0 : 0.3,
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, color: Colors.white70, size: 18),
             const SizedBox(width: 6),
@@ -385,61 +487,6 @@ class _PlayerScreenState extends State<PlayerScreen> with TickerProviderStateMix
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPlayButton(AudioProvider audioProvider) {
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        audioProvider.togglePlayPause();
-      },
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withOpacity(0.5),
-              blurRadius: 20,
-              spreadRadius: 2,
-            ),
-          ],
-        ),
-        child: Icon(
-          audioProvider.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-          color: Colors.white,
-          size: 34,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildControlButton({
-    required IconData icon,
-    required double size,
-    required VoidCallback? onPressed,
-  }) {
-    return Opacity(
-      opacity: onPressed != null ? 1.0 : 0.3,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: IconButton(
-          onPressed: onPressed != null
-              ? () {
-                  HapticFeedback.lightImpact();
-                  onPressed();
-                }
-              : null,
-          icon: Icon(icon, color: Colors.white, size: size),
-          padding: const EdgeInsets.all(10),
         ),
       ),
     );
