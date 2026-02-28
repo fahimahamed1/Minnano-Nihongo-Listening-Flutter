@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/models/lesson.dart';
@@ -38,7 +39,7 @@ class HomeScreen extends StatelessWidget {
                     children: [
                       _HomeHeader(),
                       Expanded(child: _LessonList(lessons: _lessons)),
-                      const SizedBox(height: 52),
+                      const SizedBox(height: 36),
                     ],
                   ),
                 ),
@@ -279,8 +280,30 @@ class _LessonBadge extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 // Developer credit footer
 // ─────────────────────────────────────────────────────────────────────────────
-class _DeveloperCredit extends StatelessWidget {
+class _DeveloperCredit extends StatefulWidget {
   const _DeveloperCredit();
+
+  @override
+  State<_DeveloperCredit> createState() => _DeveloperCreditState();
+}
+
+class _DeveloperCreditState extends State<_DeveloperCredit> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadVersion();
+  }
+
+  Future<void> _loadVersion() async {
+    final packageInfo = await PackageInfo.fromPlatform();
+    if (mounted) {
+      setState(() {
+        _version = 'v${packageInfo.version}';
+      });
+    }
+  }
 
   Future<void> _launch(String url) async {
     try {
@@ -300,14 +323,13 @@ class _DeveloperCredit extends StatelessWidget {
       child: SafeArea(
         top: false,
         child: Padding(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           child: Row(
             children: [
               // Japanese mon circle
               Container(
-                width: 26,
-                height: 26,
+                width: 22,
+                height: 22,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(color: _monBorder, width: 1),
@@ -315,47 +337,47 @@ class _DeveloperCredit extends StatelessWidget {
                 child: const Center(
                   child: Text('和',
                       style: TextStyle(
-                          fontSize: 11,
+                          fontSize: 9,
                           color: AppColors.primary,
                           fontWeight: FontWeight.w600)),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
               Expanded(
                 child: Row(
                   children: [
                     const Text('Crafted with ❤️ by ',
                         style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 9,
                             color: AppColors.textTertiary)),
                     GestureDetector(
                       onTap: () =>
                           _launch('https://www.facebook.com/fahimahamed4'),
                       child: const Text('Fahim Ahamed',
                           style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9,
                               color: AppColors.primary,
                               fontWeight: FontWeight.w600)),
                     ),
                     const Text(' & ',
                         style: TextStyle(
-                            fontSize: 10,
+                            fontSize: 9,
                             color: AppColors.textTertiary)),
                     GestureDetector(
                       onTap: () =>
                           _launch('https://www.facebook.com/fahadahamed4'),
                       child: const Text('Fahad Ahamed',
                           style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9,
                               color: AppColors.primary,
                               fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
               ),
-              const Text('v3.3.0',
-                  style: TextStyle(
-                      fontSize: 9,
+              Text(_version,
+                  style: const TextStyle(
+                      fontSize: 8,
                       color: AppColors.textTertiary,
                       letterSpacing: 0.5)),
             ],

@@ -51,13 +51,4 @@ jobs:
           tag: ${{ steps.version.outputs.tag }}
           overwrite: true
           body: |
-            Minnano Nihongo Listening ${{ steps.version.outputs.tag }}
-
-            Android Release Build
-
-            Features:
-            - 50 Japanese listening lessons
-            - Smooth animations
-            - Optimized performance
-
-            Developed by Fahim Ahamed & Fahad Ahamed
+            Release ${{ steps.version.outputs.tag }}
