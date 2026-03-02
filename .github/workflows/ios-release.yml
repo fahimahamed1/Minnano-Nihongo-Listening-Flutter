@@ -34,9 +34,9 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Update pods
+      - name: Install CocoaPods dependencies
         working-directory: ios
-        run: pod repo update
+        run: pod install --repo-update
 
       - name: Build iOS
         run: flutter build ios --release --no-codesign
@@ -46,14 +46,14 @@ jobs:
         run: |
           mkdir -p Payload
           mv Runner.app Payload/
-          zip -qr -9 MinnanoNihongo.ipa Payload
+          zip -qr -9 MinnanoNihongoListening.ipa Payload
 
       - name: Upload to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: build/ios/iphoneos/MinnanoNihongo.ipa
-          asset_name: MinnanoNihongo-${{ steps.version.outputs.tag }}.ipa
+          file: build/ios/iphoneos/MinnanoNihongoListening.ipa
+          asset_name: MinnanoNihongoListening-${{ steps.version.outputs.tag }}.ipa
           tag: ${{ steps.version.outputs.tag }}
           overwrite: true
           body: |
