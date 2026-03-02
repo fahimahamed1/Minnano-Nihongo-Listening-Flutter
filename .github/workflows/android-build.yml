@@ -1,32 +1,48 @@
-name: Android Build
+name: Flutter Android Release
 
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    tags: ['v*']  # Trigger on tags like v1.0.0
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build APK
+    name: Build APK & AAB
     runs-on: ubuntu-latest
 
     steps:
+      # 1️⃣ Checkout the repo
       - uses: actions/checkout@v4
 
+      # 2️⃣ Setup Java
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
+      # 3️⃣ Setup Flutter
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
 
+      # 4️⃣ Decode keystore from GitHub Secrets
+      - name: Decode Keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.keystore
+
+      # 5️⃣ Set Gradle environment variables
+      - name: Set Gradle env vars
+        run: |
+          echo "KEYSTORE_FILE=android/app/release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
+
+      # 6️⃣ Get version from pubspec.yaml
       - name: Get version
         id: version
         run: |
@@ -36,19 +52,36 @@ jobs:
           echo "build=$BUILD" >> $GITHUB_OUTPUT
           echo "tag=v$VERSION" >> $GITHUB_OUTPUT
 
+      # 7️⃣ Install dependencies
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Build APK
+      # 8️⃣ Build signed APK
+      - name: Build signed APK
         run: flutter build apk --release
 
-      - name: Upload to release
+      # 9️⃣ Build signed AAB for Play Store
+      - name: Build signed AAB
+        run: flutter build appbundle --release
+
+      # 🔟 Upload APK to GitHub Release
+      - name: Upload APK to GitHub Release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: build/app/outputs/flutter-apk/app-release.apk
-          asset_name: MinnanoNihongo-${{ steps.version.outputs.tag }}.apk
+          asset_name: MinnanoNihongoListening-${{ steps.version.outputs.tag }}.apk
           tag: ${{ steps.version.outputs.tag }}
           overwrite: true
-          body: |
-            Release ${{ steps.version.outputs.tag }}
+          body: Release APK for testing
+
+      # 1️⃣1️⃣ Upload AAB to GitHub Release
+      - name: Upload AAB to GitHub Release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: build/app/outputs/bundle/release/app-release.aab
+          asset_name: MinnanoNihongoListening-${{ steps.version.outputs.tag }}.aab
+          tag: ${{ steps.version.outputs.tag }}
+          overwrite: true
+          body: Release AAB for Play Store
