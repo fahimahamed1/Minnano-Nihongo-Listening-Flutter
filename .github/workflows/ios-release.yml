@@ -1,4 +1,4 @@
-name: iOS Build
+name: Flutter iOS Release 
 
 on:
   workflow_dispatch:
