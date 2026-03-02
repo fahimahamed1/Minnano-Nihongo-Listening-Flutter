@@ -23,8 +23,6 @@ This is a **Flutter version** of the original [Minnano-Nihongo-Listening](https:
 - **High-Quality Audio Player** - With progress tracking, speed controls, and 10-second skip
 - **Background Playback** - Keep listening while using other apps
 - **Progress Tracking** - Track your completed lessons
-- **Favorites** - Save lessons you want to revisit
-- **Search** - Quickly find lessons by title or number
 
 ## 📱 Screenshots
 
