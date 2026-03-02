@@ -37,7 +37,7 @@ jobs:
       # 5️⃣ Set Gradle environment variables
       - name: Set Gradle env vars
         run: |
-          echo "KEYSTORE_FILE=android/app/release.keystore" >> $GITHUB_ENV
+          echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
           echo "KEYSTORE_PASSWORD=${{ secrets.KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> $GITHUB_ENV
